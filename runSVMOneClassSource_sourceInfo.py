@@ -15,14 +15,9 @@ import os
 import tarfile
 import cPickle as pickle
 import xlrd
-from operator import itemgetter
-from heapq import nlargest
-import math
-from operator import itemgetter
-from heapq import nlargest
 import multiprocessing
 import warnings
-import time
+
 
 def validate(X_train, X_excluded, clf):
     errorNormal = 0.0
@@ -43,15 +38,15 @@ def validate(X_train, X_excluded, clf):
             errorAnomalous += 1.0
     
     # Overall performance
-    avgErrorNormal = float(errorNormal)/float(len(X_train))
+    avgErrorNormal = float(errorNormal) / float(len(X_train))
     avgErrorAnomalous = 0.0
     wNormal = 1.0
     wAnomalous = 0.0
     if len(X_excluded) > 0:
-        avgErrorAnomalous = float(errorAnomalous)/float(len(X_excluded))
+        avgErrorAnomalous = float(errorAnomalous) / float(len(X_excluded))
         wNormal = 0.5
         wAnomalous = 0.5
-    overallError = wNormal*(avgErrorNormal) + wAnomalous*(avgErrorAnomalous)
+    overallError = wNormal * (avgErrorNormal) + wAnomalous * (avgErrorAnomalous)
     return overallError
 
 
@@ -61,7 +56,7 @@ def leaveOneOutCrossValidation(X_train, X_excluded, clf, c):
     # iterate over normal points
     for k in range(len(X_train)):
         # leave one out and concatenate
-        cur_X_train = np.concatenate((X_train[:k],X_train[(k+1):]), axis=0)
+        cur_X_train = np.concatenate((X_train[:k], X_train[(k + 1):]), axis=0)
         # train svm
         clf.fit(cur_X_train)
         # evaluate
@@ -82,29 +77,25 @@ def leaveOneOutCrossValidation(X_train, X_excluded, clf, c):
             errorAnomalous += 1.0
     
     # Overall performance
-    avgErrorNormal = float(errorNormal)/float(len(X_train))
+    avgErrorNormal = float(errorNormal) / float(len(X_train))
     avgErrorAnomalous = 0.0
     wNormal = 1.0
     wAnomalous = 0.0
     if len(X_excluded) > 0:
-        avgErrorAnomalous = float(errorAnomalous)/float(len(X_excluded))
+        avgErrorAnomalous = float(errorAnomalous) / float(len(X_excluded))
         wNormal = 0.1
         wAnomalous = 0.9
-    firstRoundError = wNormal*(avgErrorNormal) + wAnomalous*(avgErrorAnomalous)
-    
-    #if c == "Brazil":
-    overallError = 0.5*firstRoundError + 0.5*validate(X_train, X_excluded, clf)
-    #overallError = firstRoundError
-    #else:
-    #    overallError = 0.8*firstRoundError + 0.2*validate(X_train, X_excluded,clf)
+    firstRoundError = wNormal * (avgErrorNormal) + wAnomalous * (avgErrorAnomalous)
+    overallError = 0.5 * firstRoundError + 0.5 * validate(X_train, X_excluded, clf)
     return overallError
 
+
 def findSVMForSource(args):
-    curr_proc=multiprocessing.current_process()
+    curr_proc = multiprocessing.current_process()
     # uncomment following line to get this to work
-    curr_proc.daemon=False
+    curr_proc.daemon = False
     c, s, src, training_data, hanta_topic_dict = args
-    #iterate over training data for source
+    # iterate over training data for source
     X_train = []
     X_excluded = []
     X_total = []
@@ -122,27 +113,29 @@ def findSVMForSource(args):
             X_train.append(dataPoint)
     
     if (len(X_train) >= 10):
-        #find best OCSVM
-        clf_info = findBestOCSVM(X_train,X_excluded,c,s,src)
-        return (src,clf_info)
+        # find best OCSVM
+        try:
+            clf_info = findBestOCSVM(X_train, X_excluded, c, s, src)
+            return (src, clf_info)
+        except Exception:
+            return (src, None)
     else:
-        return (src,None)
+        return (src, None)
+
 
 def computeCLFScore(args):
-    config,X_train_ar,X_excluded_ar,c = args
+    config, X_train_ar, X_excluded_ar, c = args
     if config['kernel'] == "rbf":
-        clf = svm.OneClassSVM(nu = config['nuValue'], kernel = "rbf", gamma = config['gValue'])
-    elif config['kernel'] == "linear" :
-        clf = svm.OneClassSVM(nu = config['nuValue'], kernel = "linear")
+        clf = svm.OneClassSVM(nu=config['nuValue'], kernel="rbf", gamma=config['gValue'])
+    elif config['kernel'] == "linear":
+        clf = svm.OneClassSVM(nu=config['nuValue'], kernel="linear")
     else:
-        clf = svm.OneClassSVM(nu = config['nuValue'], kernel= config['kernel'], gamma = config['gValue'], degree = config['degree'], coef0 = config['coef0'])
-    #if c == "Brazil":
-    #    score = validate(X_train_ar, X_excluded_ar, clf)
-    #else:
+        clf = svm.OneClassSVM(nu=config['nuValue'], kernel=config['kernel'], gamma=config['gValue'], degree=config['degree'], coef0=config['coef0'])
     score = leaveOneOutCrossValidation(X_train_ar, X_excluded_ar, clf, c)
     return score
 
-def findBestOCSVM(X_train,X_excluded,c,s,src):
+
+def findBestOCSVM(X_train, X_excluded, c, s, src):
     # Initialize labels
     X_total = []
     for e in X_train:
@@ -154,49 +147,24 @@ def findBestOCSVM(X_train,X_excluded,c,s,src):
     X_train_ar = np.array(X_train)
     X_excluded_ar = np.array(X_excluded)
     X_total_ar = np.array(X_total)
-    # Scale arrays to zero mean unit std
-    scaler = StandardScaler().fit(X_total_ar)
-    #X_total_ar_scaled = scaler.transform(X_total_ar)
-    #X_train_ar_scaled = X_total_ar_scaled[:len(X_train_ar)]
-    #X_excluded_ar_scaled = X_total_ar_scaled[len(X_train_ar):]
-    
+    # Scale arrays to zero mean unit std but not used
+    scaler = StandardScaler().fit(X_total_ar)   
     X_train_ar_scaled = X_train_ar
     X_excluded_ar_scaled = X_excluded_ar
     X_total_ar_scaled = X_total_ar
-
-    # Initialize parameter options
-    #if c in ["Brazil", "Uruguay"]:
-    #    nurbf = [0.0002, 0.0004, 0.0006, 0.0008, 0.002, 0.004, 0.006, 0.008, 0.02, 0.04, 0.06, 0.08, 0.2, 0.4, 0.5]
-    #    nurbf.reverse()
-    #    nupoly = [0.0002, 0.0004, 0.0006, 0.0008, 0.002, 0.004, 0.006, 0.008, 0.02, 0.04, 0.06, 0.08, 0.2, 0.4, 0.5]
-    #    nupoly.reverse()
-    #    gammarbf = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-    #    gammapoly = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-    #    degreepoly = [3, 4, 5, 6, 7]
-    #    coef0_values = [0.0]
-    #else:
-    #    nurbf = [0.0002, 0.0004, 0.0006, 0.0008, 0.002]
-    #    nurbf.reverse()
-    #    nupoly = [0.4, 0.5]
-    #    nupoly.reverse()
-    #    gammarbf = [0.1, 0.2, 0.4, 0.8]
-    #    gammapoly = [0.1, 0.2, 0.4, 0.6, 0.8]
-    #    coef0_values = [-1.0, -2.0]
-    #    degreepoly = [3, 4]
-
+   
     # Initialize parameter options
     nurbf = [0.0001, 0.001, 0.01, 0.1]
     nurbf.reverse()
     nupoly = [0.0001, 0.001, 0.01, 0.1, 0.5]
     nupoly.reverse()
-    gammarbf = [0.1, 0.5,1.0,2.0]
-    gammapoly = [0.1, 0.5,1.0,3.0]
+    gammarbf = [0.1, 0.5, 1.0, 2.0]
+    gammapoly = [0.1, 0.5, 1.0, 3.0]
     coef0_values = [0.1, 1.0, -0.5, -1.0, -2.0]
     degreepoly = [3, 5, 7]
     
     # Iterate over parameters and run leave-one-out cross validation
     clf_config_options = []
-        #if c in ["Chile", "Argentina"]:
     for nuValue in nurbf:
         for gValue in gammarbf:
             newConfig = {}
@@ -233,7 +201,7 @@ def findBestOCSVM(X_train,X_excluded,c,s,src):
         clf_config_options.append(newConfig)
     
     p = multiprocessing.Pool(30)
-    clf_Scores = p.map(computeCLFScore, [(config,X_train_ar_scaled,X_excluded_ar_scaled,c) for config in clf_config_options])
+    clf_Scores = p.map(computeCLFScore, [(config, X_train_ar_scaled, X_excluded_ar_scaled, c) for config in clf_config_options])
     best_clf_score = 10.0
     best_conf_index = -1
     min_error = min(clf_Scores)
@@ -247,25 +215,16 @@ def findBestOCSVM(X_train,X_excluded,c,s,src):
     
     # Return best classfier
     if clf_config_options[best_conf_index]['kernel'] == "rbf":
-        best_clf = svm.OneClassSVM(nu = clf_config_options[best_conf_index]['nuValue'], kernel = "rbf", gamma = clf_config_options[best_conf_index]['gValue'])
-    elif clf_config_options[best_conf_index]['kernel'] == "linear" :
-        best_clf = svm.OneClassSVM(nu = clf_config_options[best_conf_index]['nuValue'], kernel = "linear")
+        best_clf = svm.OneClassSVM(nu=clf_config_options[best_conf_index]['nuValue'], kernel="rbf", gamma=clf_config_options[best_conf_index]['gValue'])
+    elif clf_config_options[best_conf_index]['kernel'] == "linear":
+        best_clf = svm.OneClassSVM(nu=clf_config_options[best_conf_index]['nuValue'], kernel="linear")
     else:
-        best_clf = svm.OneClassSVM(nu = clf_config_options[best_conf_index]['nuValue'], kernel= clf_config_options[best_conf_index]['kernel'], gamma = clf_config_options[best_conf_index]['gValue'], degree = clf_config_options[best_conf_index]['degree'], coef0 = clf_config_options[best_conf_index]['coef0'])
+        best_clf = svm.OneClassSVM(nu=clf_config_options[best_conf_index]['nuValue'], kernel=clf_config_options[best_conf_index]['kernel'], gamma=clf_config_options[best_conf_index]['gValue'], degree=clf_config_options[best_conf_index]['degree'], coef0=clf_config_options[best_conf_index]['coef0'])
     best_clf.fit(X_train_ar_scaled)
     # grab distance of X_total
     distances = best_clf.decision_function(X_total_ar_scaled)
     maxPositiveDistance = max(distances)
-    maxNegativeDistance = min(-0.001,min(distances))
-    #if c == "Chile" and s == ["Araucan\xc3\xada","Los Lagos"]:
-    #if best_clf_score > 0.1:
-    #    print "Src = ",src
-    #    print "Best clf score = ",best_clf_score
-    #    print "Min models=",len(min_models)
-    #    print "\n Train data: "
-    #    print best_clf
-    #    print X_train_ar_scaled
-    #    print "\n\n"
+    maxNegativeDistance = min(-0.001, min(distances))
     return (best_clf, scaler, maxNegativeDistance, maxPositiveDistance)
 
 
@@ -307,43 +266,44 @@ if len(sys.argv) < 6:
 else:
     pred_date = datetime.strptime(sys.argv[1], "%d/%m/%Y").date()
     warning_date = pred_date + timedelta(days=4)
-    time_window_size = int(sys.argv[2]) # in months
-    earliest_pred_date = pred_date + relativedelta(months = -time_window_size)
+    time_window_size = int(sys.argv[2])  # in months
+    earliest_pred_date = pred_date + relativedelta(months=-time_window_size)
     inputData_dir_prefix = sys.argv[3]
     outputData_dir_prefix = sys.argv[4]
     warnings_dir_prefix = sys.argv[5]
     GSR_file = sys.argv[6]
 
 # find all relevant tensor decomposition files in the input data dir
-fDir = inputData_dir_prefix+'/new_state_pkl_file-*.tar'
+fDir = inputData_dir_prefix + '/new_state_pkl_file-*.tar'
 historicalFiles = []
 currentFile = ''
 for f in glob.glob(fDir):
     fName = os.path.basename(f)
     fDate_str = fName.rstrip('.tar')
     fDate_str = fDate_str.split('-')
-    fDate_str = fDate_str[2]+'/'+fDate_str[3]+'/'+fDate_str[1] # format: %m/%d/%Y
+    fDate_str = fDate_str[2] + '/' + fDate_str[3] + '/' + fDate_str[1]  # format: %m/%d/%Y
     fDate = datetime.strptime(fDate_str, "%m/%d/%Y").date()
     if (earliest_pred_date <= fDate < pred_date):
-        historicalFiles.append((fDate,os.path.basename(f)))
+        historicalFiles.append((fDate, os.path.basename(f)))
     elif (fDate == pred_date):
         currentFile = os.path.basename(f)
     else:
         continue
 print pred_date
+print GSR_file
 # validate files
 if (len(historicalFiles) == 1 or currentFile == ''):
     print "No relevant data found. Exiting..."
     sys.exit(-1)
 
-#extract data for current week and predict disease outbreaks
-#initialize country, state, topic distribution training data dictionary
+# extract data for current week and predict disease outbreaks
+# initialize country, state, topic distribution training data dictionary
 testing_data_dict = {}
 
-#iterate over prediction file and extract test data
+# iterate over prediction file and extract test data
 # open file
-fileName = inputData_dir_prefix+'/'+currentFile
-read_tar = tarfile.open(fileName,'r')
+fileName = inputData_dir_prefix + '/' + currentFile
+read_tar = tarfile.open(fileName, 'r')
 
 # extract data
 estimatedword = pickle.load(read_tar.extractfile('newestimatedword.pkl'))
@@ -379,11 +339,6 @@ hanta_topic = topicdtm(estimatedword, worddict)
 print hanta_topic
 hanta_topic_dict = {}
 for location in totalprovincelist:
-    #topic_dict = {}
-    #for element in hanta_topic:
-    #    topic_dict[element] = estimatedlocation[locationdict[location], element]
-    #sel_topic = max(topic_dict, key = topic_dict.get)
-    #hanta_topic_dict[location] = [sel_topic]
     hanta_topic_dict[location] = hanta_topic
 
 timepoint = np.shape(estimatedtime)[1]
@@ -411,19 +366,19 @@ for entryKey in topsourceloctimedict:
         else:
             testing_data_dict[country][state] = {}
             testing_data_dict[country][state][source] = {}
-            testing_data_dict[country][state][source][topicIndex] =topsourceloctimedict[entryKey]
+            testing_data_dict[country][state][source][topicIndex] = topsourceloctimedict[entryKey]
     else:
         testing_data_dict[country] = {}
         testing_data_dict[country][state] = {}
         testing_data_dict[country][state][source] = {}
-        testing_data_dict[country][state][source][topicIndex] =topsourceloctimedict[entryKey]
+        testing_data_dict[country][state][source][topicIndex] = topsourceloctimedict[entryKey]
 
 # load positive examples from GSR
 positive_examples_state = {}
 
 GSR_wb = xlrd.open_workbook(GSR_file)
 GSR_sh = GSR_wb.sheet_by_name("CLEAN V1")
-for i in xrange(1,GSR_sh.nrows):
+for i in xrange(1, GSR_sh.nrows):
     if isinstance(GSR_sh.row_values(i)[7], float):
         event_type = GSR_sh.row_values(i)[7]
     else:
@@ -441,7 +396,7 @@ for i in xrange(1,GSR_sh.nrows):
         if state[0] == " ":
             state = state[1:len(state)]
         elif state[len(state) - 1] == " ":
-            state = state[1:len(state)-1]
+            state = state[1:len(state) - 1]
         if state == "os Lagos":
             state = "Los Lagos"
         elif state == "aule":
@@ -455,7 +410,6 @@ for i in xrange(1,GSR_sh.nrows):
         if state == "Valpara\xc3\xadso" and event_date == date(2013, 2, 22):
             state = "Los Lagos"
         
-        
         if (country in positive_examples_state):
             if (state in positive_examples_state[country]):
                 positive_examples_state[country][state].append(event_date)
@@ -468,15 +422,15 @@ for i in xrange(1,GSR_sh.nrows):
             positive_examples_state[country][state].append(event_date)
 
 
-#initialize country, state, topic distribution training data dictionary
+# initialize country, state, topic distribution training data dictionary
 training_data_dict = {}
 training_data_global_dict = {}
 
-#iterate over historical files and extract training data
+# iterate over historical files and extract training data
 for fileInfo in historicalFiles:
     # open file
-    fileName = inputData_dir_prefix+'/'+fileInfo[1]
-    read_tar = tarfile.open(fileName,'r')
+    fileName = inputData_dir_prefix + '/' + fileInfo[1]
+    read_tar = tarfile.open(fileName, 'r')
     print fileName
     # extract data
     
@@ -517,10 +471,9 @@ for fileInfo in historicalFiles:
         if (country in positive_examples_state):
             if (state in positive_examples_state[country]):
                 for element in positive_examples_state[country][state]:
-                    if fileInfo[0] <= element <= fileInfo[0] + timedelta(days = 6):
+                    if fileInfo[0] <= element <= fileInfo[0] + timedelta(days=6):
                         excludeStateExample = -1
-        
-        
+                
         if (country in training_data_global_dict):
             if (state in training_data_global_dict[country]):
                 training_data_global_dict[country][state]["_weeks"][weekIndex] = excludeStateExample
@@ -540,7 +493,7 @@ for fileInfo in historicalFiles:
             if (state in training_data_dict[country]):
                 if (source in training_data_dict[country][state]):
                     if (weekIndex in training_data_dict[country][state][source]):
-                        training_data_dict[country][state][source][weekIndex][topicIndex] =topsourceloctimedict[entryKey]
+                        training_data_dict[country][state][source][weekIndex][topicIndex] = topsourceloctimedict[entryKey]
                         training_data_dict[country][state][source][weekIndex]["_actValue"] = excludeStateExample
                     else:
                         training_data_dict[country][state][source][weekIndex] = {}
@@ -566,8 +519,8 @@ for fileInfo in historicalFiles:
             training_data_dict[country][state][source][weekIndex][topicIndex] = topsourceloctimedict[entryKey]
 
 
-#train one-class svm for each country, state, source
-#get total entries
+# train one-class svm for each country, state, source
+# get total entries
 
 total_entries = 0.0
 
@@ -587,6 +540,7 @@ for c in training_data_dict:
         country_state_source_svms[c][s] = {}
         country_state_source_scalers[c][s] = {}
         country_state_source_distances[c][s] = {}
+
         p = multiprocessing.Pool(30)
         clf_src_result = p.map(findSVMForSource, [(c, s, src, training_data_dict[c][s][src], hanta_topic_dict) for src in training_data_dict[c][s]])
         for e in clf_src_result:
@@ -604,64 +558,14 @@ for c in training_data_dict:
                 country_state_source_distances[c][s][src]["_posD"] = maxPositiveDistance
                 training_data_global_dict[c][s]["_sources"][src] = 1
         processed += 1.0
-        progress = 100*round(processed/total_entries,2)
-        sys.stdout.write("Training progress: %d%% (%d/%d)  \r" % (progress,processed,total_entries) )
+        progress = 100 * round(processed / total_entries, 2)
+        sys.stdout.write("Training progress: %d%% (%d/%d)  \r" % (progress, processed, total_entries))
         sys.stdout.flush()
 
 
-#iterate over training dataset and perform multiplicative weights algorithm
+# iterate over training dataset and perform multiplicative weights algorithm
 country_state_source_weights = {}
 country_state_source_acc_dict = {}
-
-#for c in training_data_global_dict:
-#    country_state_source_weights[c] = {}
-#    for s in training_data_global_dict[c]:
-#        country_state_source_weights[c][s] = {}
-
-#        epsilon = 0.1
-#        NumSources = len(training_data_global_dict[c][s]["_sources"])
-#        if NumSources == 0:
-#            continue
-#        NumRounds = max(1, math.ceil(4.0 * math.log(NumSources)/(epsilon*epsilon)))
-
-#        for src in training_data_global_dict[c][s]["_sources"]:
-#            country_state_source_weights[c][s][src] = 1.0/float(NumSources)
-#        for i in xrange(int(NumRounds)):
-#            for w in sorted(training_data_global_dict[c][s]["_weeks"]):
-#                actualValue = training_data_global_dict[c][s]["_weeks"][w]
-#                sourceIds = country_state_source_weights[c][s].keys()
-#                sourceWeights = country_state_source_weights[c][s].values()
-#                sampleMultinomial = np.random.multinomial(1, sourceWeights, size = 1)[0]
-#                sampledSrc = np.nonzero(sampleMultinomial == 1)[0][0]
-#                srcThisRound = sourceIds[sampledSrc]
-#                if (w in training_data_dict[c][s][srcThisRound]):
-#                    X_pred = []
-#                    dataPoint = []
-#                    for t in hanta_topic_dict[(s, c)]:
-#                        dataPoint.append(round(training_data_dict[c][s][srcThisRound][w][t], 2))
-#                    X_pred.append(dataPoint)
-#                    X_pred_ar = np.array(X_pred)
-#                    # scale prediction point
-#                    X_pred_ar_scaled = country_state_source_scalers[c][s][srcThisRound].transform(X_pred_ar)
-#                    src_prediction = country_state_source_svms[c][s][srcThisRound].predict(X_pred_ar_scaled)[0]
-#                    if src_prediction != actualValue:
-#                        country_state_source_weights[c][s][srcThisRound] = (1 - epsilon) * country_state_source_weights[c][s][srcThisRound]
-#                        totalWeight = 0.0
-#                        for src in country_state_source_weights[c][s]:
-#                            totalWeight += country_state_source_weights[c][s][src]
-#                        for src in country_state_source_weights[c][s]:
-#                            country_state_source_weights[c][s][src] = float(country_state_source_weights[c][s][src])/float(totalWeight)
-#                #else:
-#                #    country_state_source_weights[c][s][srcThisRound] = (1 - epsilon) * country_state_source_weights[c][s][srcThisRound]
-#                totalWeight = 0.0
-#                for src in country_state_source_weights[c][s]:
-#                    totalWeight += country_state_source_weights[c][s][src]
-#                for src in country_state_source_weights[c][s]:
-#                    country_state_source_weights[c][s][src] = float(country_state_source_weights[c][s][src])/float(totalWeight)
-
-#pickle.dump(country_state_source_weights, open("css_weights-" + date.isoformat(pred_date) + ".pkl", "wb"))
-
-
 for c in training_data_global_dict:
     country_state_source_weights[c] = {}
     country_state_source_acc_dict[c] = {}
@@ -673,7 +577,7 @@ for c in training_data_global_dict:
         if NumSources == 0:
             continue
         for src in training_data_global_dict[c][s]["_sources"]:
-            country_state_source_weights[c][s][src] = 1.0/float(NumSources)
+            country_state_source_weights[c][s][src] = 1.0 / float(NumSources)
         for w in sorted(training_data_global_dict[c][s]["_weeks"]):
             actualValue = training_data_global_dict[c][s]["_weeks"][w]
             for src in training_data_global_dict[c][s]["_sources"]:
@@ -682,11 +586,8 @@ for c in training_data_global_dict:
                     dataPoint = []
                     for t in hanta_topic_dict[(s, c)]:
                         dataPoint.append(round(training_data_dict[c][s][src][w][t], 2))
-                    #dataPoint.append(round(training_data_dict[c][s][src][w][t], 4))
                     X_pred.append(dataPoint)
                     X_pred_ar = np.array(dataPoint)
-                    # scale prediction point
-                    #X_pred_ar_scaled = country_state_source_scalers[c][s][src].transform(X_pred_ar)
                     X_pred_ar_scaled = X_pred_ar
                     src_prediction = country_state_source_svms[c][s][src].predict(X_pred_ar_scaled)[0]
                 else:
@@ -705,65 +606,15 @@ for c in training_data_global_dict:
         for src in country_state_source_weights[c][s]:
             totalWeight += country_state_source_weights[c][s][src]
         for src in country_state_source_weights[c][s]:
-            country_state_source_weights[c][s][src] = float(country_state_source_weights[c][s][src])/float(totalWeight)
-
-
-#for c in training_data_global_dict:
-#    country_state_source_weights[c] = {}
-#    for s in training_data_global_dict[c]:
-#        country_state_source_weights[c][s] = {}
-#        source_predictions = {}
-#        epsilon = 0.5
-#        NumSources = len(training_data_global_dict[c][s]["_sources"])
-#        if NumSources == 0:
-#            continue
-#        for src in training_data_global_dict[c][s]["_sources"]:
-#            country_state_source_weights[c][s][src] = 1.0/float(NumSources)
-#            source_predictions[src] = 0.0
-#        # Retrieve predictions for each week
-#        for w in sorted(training_data_global_dict[c][s]["_weeks"]):
-#            actualValue = training_data_global_dict[c][s]["_weeks"][w]
-#            for src in training_data_global_dict[c][s]["_sources"]:
-#                if (w in training_data_dict[c][s][src]):
-#                    X_pred = []
-#                    dataPoint = []
-#                    for t in hanta_topic_dict[(s, c)]:
-#                        dataPoint.append(round(training_data_dict[c][s][src][w][t], 2))
-#                    X_pred.append(dataPoint)
-#                    X_pred_ar = np.array(dataPoint)
-#                    # scale prediction point
-#                    X_pred_ar_scaled = country_state_source_scalers[c][s][src].transform(X_pred_ar)
-#                    src_prediction = country_state_source_svms[c][s][src].predict(X_pred_ar_scaled)[0]
-#                    source_predictions[src] = src_prediction
-#                else:
-#                    source_predictions[src] = 0.0
-#            # Set majority prediction for week w
-#            total_value = 0.0
-#            for src in source_predictions:
-#                total_value += source_predictions[src]*country_state_source_weights[c][s][src]
-#            prediction = 1.0
-#            if total_value < 0:
-#                prediction = -1.0
-#            # Evaluate prediction
-#            if prediction != actualValue:
-#                # Find wrong sources and reduce weights
-#                for src in source_predictions:
-#                    if source_predictions[src] != actualValue:
-#                        country_state_source_weights[c][s][src] = (1 - epsilon) * country_state_source_weights[c][s][src]
-#            # Renormalize weights
-#            totalWeight = 0.0
-#            for src in country_state_source_weights[c][s]:
-#                totalWeight += country_state_source_weights[c][s][src]
-#            for src in country_state_source_weights[c][s]:
-#                country_state_source_weights[c][s][src] = float(country_state_source_weights[c][s][src])/float(totalWeight)
+            country_state_source_weights[c][s][src] = float(country_state_source_weights[c][s][src]) / float(totalWeight)
 
 
 pickle.dump(country_state_source_weights, open("css_weights-" + date.isoformat(pred_date) + ".pkl", "wb"))
 
 
-#generate predictions based on weighted majority for new timepoint
+# generate predictions based on weighted majority for new timepoint
 out_filename = warnings_dir_prefix + '/disease_warnings-' + date.isoformat(warning_date) + '.txt'
-out = open(out_filename,'w')
+out = open(out_filename, 'w')
 pred_dict = {}
 pred_weight_dict = {}
 negative_count = {}
@@ -787,79 +638,51 @@ for c in testing_data_dict:
         src_pred = {}
         X_pred_to_print = {}
         for src in testing_data_dict[c][s]:
-            if (src in country_state_source_svms[c][s] and src in country_state_source_weights[c][s]):
+            if (src in country_state_source_svms[c][s] and src in country_state_source_weights[c][s] and src in country_state_source_acc_dict[c][s]):
                 X_pred = []
                 dataPoint = []
                 for t in hanta_topic_dict[(s, c)]:
                     dataPoint.append(round(training_data_dict[c][s][src][w][t], 2))
                 X_pred.append(dataPoint)
                 X_pred_ar = np.array(X_pred)
-                # scale prediction point
-                #X_pred_ar_scaled = country_state_source_scalers[c][s][src].transform(X_pred_ar)
                 X_pred_ar_scaled = X_pred_ar
                 src_pred[src] = country_state_source_svms[c][s][src].predict(X_pred_ar_scaled)[0]
                 if src_pred[src] == -1.0:
                     negative_count[c][s] += 1
-                    src_conf = country_state_source_svms[c][s][src].decision_function(X_pred_ar_scaled)/country_state_source_distances[c][s][src]["_negD"]
+                    src_conf = country_state_source_svms[c][s][src].decision_function(X_pred_ar_scaled) / country_state_source_distances[c][s][src]["_negD"]
                     pred_conf_dict[c][s].append(src_conf)
-                    pred_acc_dict[c][s]["_neg"].append(country_state_source_acc_dict[c][s][src]["_correct"]/country_state_source_acc_dict[c][s][src]["_total"])
+                    pred_acc_dict[c][s]["_neg"].append(country_state_source_acc_dict[c][s][src]["_correct"] / country_state_source_acc_dict[c][s][src]["_total"])
                 else:
-                    pred_acc_dict[c][s]["_pos"].append(country_state_source_acc_dict[c][s][src]["_correct"]/country_state_source_acc_dict[c][s][src]["_total"])
-                majorityPrediction += src_pred[src] * country_state_source_weights[c][s][src]
+                    pred_acc_dict[c][s]["_pos"].append(country_state_source_acc_dict[c][s][src]["_correct"] / country_state_source_acc_dict[c][s][src]["_total"])
+                majorityPrediction += country_state_source_weights[c][s][src] * src_pred[src]
                 X_pred_to_print[src] = X_pred_ar_scaled
         if majorityPrediction < 0:
-            #if c == "Chile":
-            #    print "Country =",c
-            #    print "State = ",s
-            #    print src_pred
-            #    print X_pred_to_print
-            #    for src in src_pred:
-            #        print "Src = ",src
-            #        print "Src weight = ",country_state_source_weights[c][s][src]
-            #        print "Src svm = ", country_state_source_svms[c][s][src]
-            #        print "Src distance =", country_state_source_svms[c][s][src].decision_function(X_pred_to_print[src])
-            #        print "Src max positive distance =", country_state_source_distances[c][s][src]["_posD"]
-            #        print "Src max negative distance =", country_state_source_distances[c][s][src]["_negD"]
-            #        print "Src prob =", country_state_source_svms[c][s][src].decision_function(X_pred_to_print[src])/country_state_source_distances[c][s][src]["_negD"]
-            #    print "MajorityVote = ", majorityPrediction
-            #    print "\n\n\n"
             if c in pred_dict:
-                pred_dict[c][s] = (float(negative_count[c][s])/len(src_pred)) * 100
+                pred_dict[c][s] = (float(negative_count[c][s]) / len(src_pred)) * 100
                 pred_weight_dict[c][s] = majorityPrediction
             else:
                 pred_dict[c] = {}
                 pred_weight_dict[c] = {}
-                pred_dict[c][s] = (float(negative_count[c][s])/len(src_pred)) * 100
+                pred_dict[c][s] = (float(negative_count[c][s]) / len(src_pred)) * 100
                 pred_weight_dict[c][s] = majorityPrediction
 
-
-country_state_source_acc_dict[c][s][src]["_correct"]
-
 for c in country_state_source_acc_dict:
-    fNameCountry = "accOutCountry/"+c+"_acc.txt"
-    fCountry = open(fNameCountry,'w')
+    fNameCountry = "accOutCountry/" + c + "_acc.txt"
+    fCountry = open(fNameCountry, 'w')
     for s in country_state_source_acc_dict[c]:
-        fNameState = "accOutState/"+c+"_"+s+"_acc.txt"
-        fState = open(fNameState,'w')
+        fNameState = "accOutState/" + c + "_" + s + "_acc.txt"
+        fState = open(fNameState, 'w')
         for src in country_state_source_acc_dict[c][s]:
-            acc = country_state_source_acc_dict[c][s][src]["_correct"]/country_state_source_acc_dict[c][s][src]["_total"]
-            newLine = src+"\t"+str(acc)+"\n"
+            acc = country_state_source_acc_dict[c][s][src]["_correct"] / country_state_source_acc_dict[c][s][src]["_total"]
+            newLine = src + "\t" + str(acc) + "\n"
             fState.write(newLine)
             fCountry.write(newLine)
         fState.close()
     fCountry.close()
 
 
-country_state_source_acc_dict[c][s][src]["_correct"]
-
 for c in pred_dict:
     for s in pred_dict[c]:
-        #max_val = max(pred_dict[c].iteritems(), key = itemgetter(1))[1]
-        #loc_keys = [k for k,v in pred_dict[c].items() if v == max_val]
-        #final_dict = {}
-        #for key in loc_keys:
-        #    final_dict[key] = negative_count[c][key]
-        #s = max(final_dict, key = final_dict.get)
         conf = 1.0
         acc_neg = 1.0
         for a in pred_acc_dict[c][s]["_neg"]:
@@ -874,7 +697,7 @@ for c in pred_dict:
                 conf *= 1 - a
                 acc_pos *= 1 - a
             acc_pos = 1 - acc_pos
-        newline = c + '\t' + s + '\t' + str(pred_dict[c][s]) +'\t' + str(acc_neg) + '\t' + str(acc_pos) + '\t' + str(conf) + '\n'
+        newline = c + '\t' + s + '\t' + str(pred_dict[c][s]) + '\t' + str(acc_neg) + '\t' + str(acc_pos) + '\t' + str(conf) + '\n'
         out.write(newline)
 out.close()
 
