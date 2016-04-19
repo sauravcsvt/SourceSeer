@@ -203,7 +203,8 @@ def New_Topic_Model(metricdict, prevlocationdict, prevworddict, estimatedlocatio
                 for rr in xrange(K):
                     topicprobs[0][rr] = (wordtopiclist[rr][worddict[word]] / wordmetric[rr]) * (topiclocationmetric[locationdict[location]][rr] / locationmetric[locationdict[location]]) * (topictimemetric[rr][t] / timemetric[rr])
                 topicprobs[0, :] = topicprobs[0, :] / sum(topicprobs[0, :])
-                topicdict[(word, location, source, t)][m] = numpy.argmax(topicprobs)
+                topic_sample = numpy.random.multinomial(1, topicprobs[0, :], size=1)[0] 
+                topicdict[(word, location, source, t)][m] = nonzero(topic_sample == 1)[0][0]
                 wordtopiclist[topicdict[(word, location, source, t)][m]][worddict[word]] += 1
                 topiclocationmetric[locationdict[location]][topicdict[(word, location, source, t)][m]] += 1
                 topictimemetric[topicdict[(word, location, source, t)][m]][t] += 1
@@ -364,7 +365,7 @@ def main():
     pickle.dump(totalsourcelist, open('totalsource.pkl', 'wb'))
     pickle.dump(totalmetricdict, open('totaldictionary.pkl', 'wb'))
     pickle.dump(prev_id_list, open("id_list.pkl", "wb"))
-    # Theo: can you write in comments the correspondance between the dictionaries below and the variable symbols from the figure in the notes ?
+
     with tarfile.open("new_state_pkl_file-" + date.isoformat(today_date) + ".tar", "w") as write_tar:
         for name in ['totalword.pkl', 'totalprovince.pkl', 'totalsource.pkl',
                      'totaldictionary.pkl', 'newestimatedword.pkl',
