@@ -1,8 +1,8 @@
 #!/usr/bin/python -W ignore::DeprecationWarning
 # -*- coding: utf-8 -*-
 
-__author__ = "Saurav Ghosh"
-__email__ = "sauravcsvt@vt.edu"
+__author__ = "Theodoros Rekatsinas"
+__email__ = "thodrek@cs.umd.edu"
 import sys
 import numpy as np
 from sklearn import svm
